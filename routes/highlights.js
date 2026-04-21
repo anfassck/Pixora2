@@ -36,4 +36,16 @@ router.get('/user/:userId', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Delete highlight
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const highlight = await Highlight.findById(req.params.id);
+    if (!highlight) return res.status(404).json({ message: 'Highlight not found' });
+    if (highlight.user.toString() !== req.user.id) return res.status(403).json({ message: 'Not authorized' });
+    await Highlight.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Highlight deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
+

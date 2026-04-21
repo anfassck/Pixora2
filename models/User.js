@@ -15,10 +15,13 @@ const userSchema = new mongoose.Schema({
   savedPosts:      [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
   isPrivate:   { type: Boolean, default: false },
   isAdmin:     { type: Boolean, default: false },
-  loginCount:  { type: Number, default: 0 },
-  lastLoginAt: { type: Date, default: null },
+  note: {
+    text: { type: String, default: '', maxlength: 60 },
+    createdAt: { type: Date, default: Date.now }
+  },
   createdAt:   { type: Date, default: Date.now },
 });
+
 
 
 userSchema.pre('save', async function(next) {

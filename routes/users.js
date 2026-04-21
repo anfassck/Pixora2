@@ -5,7 +5,23 @@ const Post = require('../models/Post');
 const Notification = require('../models/Notification');
 const verifyToken = require('../middleware/auth');
 
+// GET /api/users/search/query?q=xxx
+router.get('/search/query', async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.json([]);
+    const users = await User.find({
+      $or: [
+        { username: { $regex: q, $options: 'i' } },
+        { fullName:  { $regex: q, $options: 'i' } }
+      ]
+    }).select('username fullName avatar isPrivate note').limit(20);
+    res.json(users);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET /api/users/me — current user full profile
+
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -28,11 +44,12 @@ router.get('/suggestions/list', verifyToken, async (req, res) => {
 router.get('/all', verifyToken, async (req, res) => {
   try {
     const users = await User.find({ _id: { $ne: req.user.id } })
-      .select('username fullName avatar isPrivate')
+      .select('username fullName avatar isPrivate note')
       .sort({ username: 1 });
     res.json(users);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
 
 // GET /api/users/id/:id — get user by MongoDB ID
 router.get('/id/:id', async (req, res) => {
@@ -60,15 +77,23 @@ router.get('/:username', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// PUT /api/users/edit — update profile (fullName, bio, website, avatar, isPrivate)
+// PUT /api/users/edit — update profile (username, fullName, bio, website, avatar, isPrivate)
 router.put('/edit', verifyToken, async (req, res) => {
   try {
-    const { fullName, bio, website, avatar, isPrivate } = req.body;
+    const { username, fullName, bio, website, avatar, isPrivate } = req.body;
+    
+    // Check if username is taken
+    if (username) {
+      const existingUser = await User.findOne({ username: username.toLowerCase(), _id: { $ne: req.user.id } });
+      if (existingUser) return res.status(400).json({ message: 'Username is already taken' });
+    }
+
     const updates = {};
-    if (fullName !== undefined) updates.fullName = fullName;
-    if (bio !== undefined)      updates.bio = bio;
-    if (website !== undefined)  updates.website = website;
-    if (avatar !== undefined)   updates.avatar = avatar;
+    if (username !== undefined)  updates.username = username.toLowerCase().trim();
+    if (fullName !== undefined)  updates.fullName = fullName;
+    if (bio !== undefined)       updates.bio = bio;
+    if (website !== undefined)   updates.website = website;
+    if (avatar !== undefined)    updates.avatar = avatar;
     if (isPrivate !== undefined) updates.isPrivate = isPrivate;
 
     const user = await User.findByIdAndUpdate(
@@ -77,6 +102,7 @@ router.put('/edit', verifyToken, async (req, res) => {
     res.json(user);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
 
 // PUT /api/users/:id/follow — follow / unfollow with privacy check
 router.put('/:id/follow', verifyToken, async (req, res) => {
@@ -174,19 +200,17 @@ router.put('/privacy/toggle', verifyToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /api/users/search/query?q=xxx
-router.get('/search/query', async (req, res) => {
+// PUT /api/users/note — update status note
+router.put('/note', verifyToken, async (req, res) => {
   try {
-    const { q } = req.query;
-    if (!q) return res.json([]);
-    const users = await User.find({
-      $or: [
-        { username: { $regex: q, $options: 'i' } },
-        { fullName:  { $regex: q, $options: 'i' } }
-      ]
-    }).select('username fullName avatar isPrivate').limit(20);
-    res.json(users);
+    const { text } = req.body;
+    const user = await User.findById(req.user.id);
+    user.note = { text: text.substring(0, 60), createdAt: new Date() };
+    await user.save();
+    res.json(user.note);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;
+
+

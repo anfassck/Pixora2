@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "Backend for Pixora social media platform",
   "main": "server.js",
+  "type": "commonjs",
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js"
   },
+
   "author": "",
   "license": "MIT",
   "dependencies": {

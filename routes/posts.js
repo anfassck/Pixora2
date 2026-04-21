@@ -5,7 +5,32 @@ const Comment = require('../models/Comment');
 const User = require('../models/User');
 const verifyToken = require('../middleware/auth');
 
+// GET /api/posts/search/query?q=xxx — Search for posts and reels
+router.get('/search/query', async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.json([]);
+    
+    // Find users matching query to include their posts
+    const users = await User.find({ username: { $regex: q, $options: 'i' } }).select('_id');
+    const userIds = users.map(u => u._id);
+
+    const posts = await populatePost(
+      Post.find({
+        isArchived: false,
+        $or: [
+          { caption: { $regex: q, $options: 'i' } },
+          { tags: { $in: [new RegExp(q, 'i')] } },
+          { user: { $in: userIds } }
+        ]
+      })
+    ).sort({ createdAt: -1 }).limit(30);
+    res.json(posts);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 const populatePost = q =>
+
   q.populate('user', 'username fullName avatar isPrivate')
    .populate({ path: 'comments', populate: { path: 'user', select: 'username avatar' }, options: { sort: { createdAt: -1 }, limit: 3 } });
 
@@ -231,4 +256,46 @@ router.delete('/:id', verifyToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// PUT /api/posts/comment/:commentId — edit comment
+router.put('/comment/:commentId', verifyToken, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ message: 'Comment text required' });
+    const comment = await Comment.findById(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    
+    const user = await User.findById(req.user.id);
+    const isOwner = comment.user.toString() === req.user.id;
+    const isAdmin = user && user.isAdmin;
+    
+    if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Not authorized' });
+    
+    comment.text = text;
+    await comment.save();
+    const populated = await Comment.findById(comment._id).populate('user', 'username avatar');
+    res.json(populated);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/posts/comment/:commentId — delete comment
+router.delete('/comment/:commentId', verifyToken, async (req, res) => {
+  try {
+    const comment = await Comment.findById(req.params.commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+    
+    const user = await User.findById(req.user.id);
+    const isOwner = comment.user.toString() === req.user.id;
+    const isAdmin = user && user.isAdmin;
+    
+    if (!isOwner && !isAdmin) return res.status(403).json({ message: 'Not authorized' });
+    
+    // Remove from post
+    await Post.findByIdAndUpdate(comment.post, { $pull: { comments: comment._id } });
+    await Comment.findByIdAndDelete(req.params.commentId);
+    res.json({ message: 'Comment deleted', commentId: req.params.commentId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+
 module.exports = router;
+

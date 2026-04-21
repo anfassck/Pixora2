@@ -1,5 +1,7 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
+
 const Message = require('../models/Message');
 const auth = require('../middleware/auth');
 const multer = require('multer');
@@ -19,7 +21,22 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// GET /api/messages/unread/count
+// GET /api/messages/unread/counts — per-user unread counts
+router.get('/unread/counts', auth, async (req, res) => {
+  try {
+    const unread = await Message.aggregate([
+      { $match: { receiver: new mongoose.Types.ObjectId(req.user.id), isRead: false } },
+      { $group: { _id: '$sender', count: { $sum: 1 } } }
+    ]);
+    const counts = {};
+    unread.forEach(u => counts[u._id] = u.count);
+    res.json(counts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/messages/unread/count — total count
 router.get('/unread/count', auth, async (req, res) => {
   try {
     const count = await Message.countDocuments({ 
@@ -31,6 +48,7 @@ router.get('/unread/count', auth, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
 
 // GET /api/messages/:userId  – full conversation
 router.get('/:userId', auth, async (req, res) => {
