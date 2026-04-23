@@ -151,6 +151,7 @@ app.use('/api/messages',      messagesRouter);
 // Serve frontend static files (production build: frontend_react/dist)
 const frontendDist = path.join(__dirname, '..', 'frontend_react', 'dist');
 app.use(express.static(frontendDist));
+app.use('/assets', express.static(path.join(frontendDist, 'assets')));
 app.get('*', (req, res) => {
   const file = path.join(frontendDist, 'index.html');
   if (require('fs').existsSync(file)) {
