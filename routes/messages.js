@@ -92,6 +92,13 @@ router.post('/:userId', auth, async (req, res) => {
       mediaType: mediaType || 'text',
     });
     const populated = await msg.populate('sender', '_id username avatar');
+    
+    // Emit real-time message
+    const targetSocket = req.userSockets.get(req.params.userId);
+    if (targetSocket) {
+      req.io.to(targetSocket).emit('receive-message', populated);
+    }
+
     res.status(201).json(populated);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -115,6 +122,13 @@ router.post('/:userId/media', auth, upload.single('file'), async (req, res) => {
       mediaType,
     });
     const populated = await msg.populate('sender', '_id username avatar');
+
+    // Emit real-time message
+    const targetSocket = req.userSockets.get(req.params.userId);
+    if (targetSocket) {
+      req.io.to(targetSocket).emit('receive-message', populated);
+    }
+
     res.status(201).json(populated);
   } catch (err) {
     res.status(500).json({ message: err.message });

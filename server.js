@@ -93,6 +93,13 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Serve uploaded files (images/videos)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Attach Socket.io to req
+app.use((req, res, next) => {
+  req.io = io;
+  req.userSockets = userSockets;
+  next();
+});
+
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
