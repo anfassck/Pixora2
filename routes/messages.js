@@ -97,6 +97,19 @@ router.post('/:userId', auth, async (req, res) => {
     const targetSocket = req.userSockets.get(req.params.userId);
     if (targetSocket) {
       req.io.to(targetSocket).emit('receive-message', populated);
+    } else {
+      // Send push notification if offline
+      const User = require('../models/User');
+      const { sendPushNotification } = require('../utils/pushNotifications');
+      const receiver = await User.findById(req.params.userId).select('fcmToken');
+      if (receiver?.fcmToken) {
+        sendPushNotification(
+          receiver.fcmToken,
+          `New message from ${populated.sender.username}`,
+          populated.text || 'Sent an attachment',
+          { type: 'chat', senderId: req.user.id }
+        );
+      }
     }
 
     res.status(201).json(populated);
@@ -127,6 +140,19 @@ router.post('/:userId/media', auth, upload.single('file'), async (req, res) => {
     const targetSocket = req.userSockets.get(req.params.userId);
     if (targetSocket) {
       req.io.to(targetSocket).emit('receive-message', populated);
+    } else {
+      // Send push notification if offline
+      const User = require('../models/User');
+      const { sendPushNotification } = require('../utils/pushNotifications');
+      const receiver = await User.findById(req.params.userId).select('fcmToken');
+      if (receiver?.fcmToken) {
+        sendPushNotification(
+          receiver.fcmToken,
+          `New message from ${populated.sender.username}`,
+          'Sent an attachment',
+          { type: 'chat', senderId: req.user.id }
+        );
+      }
     }
 
     res.status(201).json(populated);

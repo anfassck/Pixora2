@@ -78,11 +78,9 @@ router.put('/:id/view', verifyToken, async (req, res) => {
   try {
     const story = await Story.findById(req.params.id);
     if (!story) return res.status(404).json({ message: 'Story not found' });
-    const alreadyViewed = story.viewers.some(v => v.toString() === req.user.id);
-    if (!alreadyViewed) {
-      story.viewers.push(req.user.id);
-      await story.save();
-    }
+    await Story.findByIdAndUpdate(req.params.id, { 
+      $addToSet: { viewers: req.user.id } 
+    });
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -108,6 +106,15 @@ router.put('/:id/like', verifyToken, async (req, res) => {
     else            story.likes.splice(idx, 1);
     await story.save();
     res.json({ likes: story.likes.length, liked: idx === -1 });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET /api/stories/:id/likers — who liked
+router.get('/:id/likers', verifyToken, async (req, res) => {
+  try {
+    const story = await Story.findById(req.params.id).populate('likes', 'username fullName avatar');
+    if (!story) return res.status(404).json({ message: 'Story not found' });
+    res.json(story.likes);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

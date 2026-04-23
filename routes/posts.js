@@ -4,6 +4,7 @@ const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const User = require('../models/User');
 const verifyToken = require('../middleware/auth');
+const { sendPushNotification } = require('../utils/pushNotifications');
 
 // GET /api/posts/search/query?q=xxx — Search for posts and reels
 router.get('/search/query', async (req, res) => {
@@ -186,6 +187,23 @@ router.put('/:id/like', verifyToken, async (req, res) => {
     if (idx === -1) post.likes.push(req.user.id);
     else post.likes.splice(idx, 1);
     await post.save();
+    
+    // Notification logic
+    if (idx === -1 && String(post.user) !== String(req.user.id)) {
+      const [sender, receiver] = await Promise.all([
+        User.findById(req.user.id).select('username'),
+        User.findById(post.user).select('fcmToken')
+      ]);
+      if (receiver?.fcmToken) {
+        sendPushNotification(
+          receiver.fcmToken,
+          'New Like ❤️',
+          `${sender.username} liked your post`,
+          { type: 'like', postId: post._id }
+        );
+      }
+    }
+
     res.json({ likes: post.likes });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -229,6 +247,15 @@ router.put('/:id/archive', verifyToken, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/posts/:id/likers — get list of users who liked
+router.get('/:id/likers', verifyToken, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id).populate('likes', 'username fullName avatar isPrivate');
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+    res.json(post.likes);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // POST /api/posts/:id/comment — add comment
 router.post('/:id/comment', verifyToken, async (req, res) => {
   try {
@@ -240,6 +267,23 @@ router.post('/:id/comment', verifyToken, async (req, res) => {
     post.comments.push(comment._id);
     await post.save();
     const populated = await Comment.findById(comment._id).populate('user', 'username avatar');
+    
+    // Notification logic
+    if (String(post.user) !== String(req.user.id)) {
+      const [sender, receiver] = await Promise.all([
+        User.findById(req.user.id).select('username'),
+        User.findById(post.user).select('fcmToken')
+      ]);
+      if (receiver?.fcmToken) {
+        sendPushNotification(
+          receiver.fcmToken,
+          'New Comment 💬',
+          `${sender.username}: ${text.substring(0, 50)}${text.length > 50 ? '...' : ''}`,
+          { type: 'comment', postId: post._id }
+        );
+      }
+    }
+
     res.status(201).json(populated);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

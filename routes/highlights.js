@@ -36,6 +36,22 @@ router.get('/user/:userId', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Update highlight title or cover
+router.put('/:id', verifyToken, async (req, res) => {
+  try {
+    const { title, cover } = req.body;
+    const highlight = await Highlight.findById(req.params.id);
+    if (!highlight) return res.status(404).json({ message: 'Highlight not found' });
+    if (highlight.user.toString() !== req.user.id) return res.status(403).json({ message: 'Not authorized' });
+    
+    if (title) highlight.title = title;
+    if (cover) highlight.cover = cover;
+    
+    await highlight.save();
+    res.json(highlight);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Delete highlight
 router.delete('/:id', verifyToken, async (req, res) => {
   try {

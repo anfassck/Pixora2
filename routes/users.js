@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const Notification = require('../models/Notification');
 const verifyToken = require('../middleware/auth');
+const { sendPushNotification } = require('../utils/pushNotifications');
 
 // GET /api/users/search/query?q=xxx
 router.get('/search/query', async (req, res) => {
@@ -144,11 +145,29 @@ router.put('/:id/follow', verifyToken, async (req, res) => {
       const exists = await Notification.findOne({ recipient: req.params.id, sender: req.user.id, type: 'follow' });
       if (!exists) {
         await Notification.create({ recipient: req.params.id, sender: req.user.id, type: 'follow' });
+        // Push Notification
+        if (userToFollow.fcmToken) {
+          sendPushNotification(
+            userToFollow.fcmToken,
+            'New Follower 👤',
+            `${currentUser.username} started following you`,
+            { type: 'follow', fromId: currentUser._id }
+          );
+        }
       }
     } else if (statusAction === 'requested') {
       const exists = await Notification.findOne({ recipient: req.params.id, sender: req.user.id, type: 'follow_request' });
       if (!exists) {
         await Notification.create({ recipient: req.params.id, sender: req.user.id, type: 'follow_request' });
+        // Push Notification
+        if (userToFollow.fcmToken) {
+          sendPushNotification(
+            userToFollow.fcmToken,
+            'Follow Request 🔒',
+            `${currentUser.username} wants to follow you`,
+            { type: 'follow_request', fromId: currentUser._id }
+          );
+        }
       }
     } else if (statusAction === 'unfollowed' || statusAction === 'unrequested') {
       await Notification.deleteOne({ recipient: req.params.id, sender: req.user.id, type: { $in: ['follow', 'follow_request'] } });
@@ -184,6 +203,15 @@ router.put('/:id/accept-follow', verifyToken, async (req, res) => {
       const exists = await Notification.findOne({ recipient: requester._id, sender: req.user.id, type: 'follow_accept' });
       if (!exists) {
         await Notification.create({ recipient: requester._id, sender: req.user.id, type: 'follow_accept' });
+        // Push Notification
+        if (requester.fcmToken) {
+          sendPushNotification(
+            requester.fcmToken,
+            'Request Accepted ✅',
+            `${user.username} accepted your follow request`,
+            { type: 'follow_accept', fromId: user._id }
+          );
+        }
       }
     }
     res.json({ success: true, followers: user.followers.length });
@@ -208,6 +236,25 @@ router.put('/note', verifyToken, async (req, res) => {
     user.note = { text: text.substring(0, 60), createdAt: new Date() };
     await user.save();
     res.json(user.note);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// PUT /api/users/fcm-token — save FCM token for push notifications
+router.put('/fcm-token', verifyToken, async (req, res) => {
+  try {
+    const { token } = req.body;
+    await User.findByIdAndUpdate(req.user.id, { fcmToken: token });
+    res.json({ message: 'FCM token saved' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// DELETE /api/users/note — remove status note
+router.delete('/note', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    user.note = { text: '', createdAt: new Date() };
+    await user.save();
+    res.json({ message: 'Note deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

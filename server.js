@@ -32,16 +32,35 @@ io.on('connection', (socket) => {
     io.emit('online-users', Array.from(userSockets.keys()));
   });
 
-  socket.on('call-user', ({ to, from, offer, type }) => {
+  socket.on('call-user', async ({ to, from, offer, type }) => {
     console.log(`📞 Call attempt: from ${from} to ${to} (${type})`);
     const targetSocket = userSockets.get(to);
+    
+    // Fetch sender and receiver info for notification
+    const User = require('./models/User');
+    const { sendPushNotification } = require('./utils/pushNotifications');
+    const [caller, receiver] = await Promise.all([
+      User.findById(from).select('username'),
+      User.findById(to).select('fcmToken')
+    ]);
+
     if (targetSocket) {
       console.log(`➡️ Forwarding call to socket ${targetSocket}`);
       io.to(targetSocket).emit('incoming-call', { from, offer, type });
       socket.emit('call-status', { status: 'ringing' });
     } else {
-      console.log(`⚠️ Target user ${to} is offline`);
+      console.log(`⚠️ Target user ${to} is offline. Sending push notification.`);
       socket.emit('call-status', { status: 'offline' });
+      
+      // Send push notification if offline
+      if (receiver?.fcmToken) {
+        sendPushNotification(
+          receiver.fcmToken,
+          `Incoming ${type} call`,
+          `Pixora: ${caller?.username || 'Someone'} is calling you`,
+          { type: 'call', fromId: from, callType: type }
+        );
+      }
     }
   });
 
