@@ -10,7 +10,11 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*", credentials: true }
+  cors: {
+    origin: ["https://pixora.anfassck.online", "http://localhost:5173", "http://localhost:3000", "http://localhost:9000"],
+    methods: ["GET", "POST"],
+    credentials: true
+  }
 });
 
 
@@ -79,7 +83,10 @@ io.on('connection', (socket) => {
 });
 
 // Middleware
-app.use(cors({ origin: true, credentials: true }));
+app.use(cors({
+  origin: ["https://pixora.anfassck.online", "http://localhost:5173", "http://localhost:3000", "http://localhost:9000"],
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
