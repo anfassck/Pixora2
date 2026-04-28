@@ -21,6 +21,37 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// GET /api/messages/conversations — list of users chatted with, sorted by latest message
+router.get('/conversations', auth, async (req, res) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    
+    const conversations = await Message.aggregate([
+      { $match: { $or: [{ sender: userId }, { receiver: userId }] } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: { $cond: [{ $eq: ['$sender', userId] }, '$receiver', '$sender'] },
+          lastMessageAt: { $first: '$createdAt' }
+        }
+      },
+      { $sort: { lastMessageAt: -1 } }
+    ]);
+    
+    const User = require('../models/User');
+    const populated = await User.find({ _id: { $in: conversations.map(c => c._id) } })
+                                .select('_id username fullName avatar note');
+                                
+    const sortedUsers = conversations.map(c => 
+      populated.find(u => u._id.toString() === c._id.toString())
+    ).filter(Boolean);
+    
+    res.json(sortedUsers);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // GET /api/messages/unread/counts — per-user unread counts
 router.get('/unread/counts', auth, async (req, res) => {
   try {
